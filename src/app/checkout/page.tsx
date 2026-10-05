@@ -137,7 +137,7 @@ export default function CheckoutPage() {
       </button>
 
       <a
-        href="https://wa.me/2340000000000"
+        href="https://wa.me/2348054724774"
         target="_blank"
         rel="noopener noreferrer"
         className="block w-full mt-3 py-3 bg-green-600 hover:bg-green-500 text-white text-center font-semibold rounded-lg"
