@@ -11,8 +11,7 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { Product, Category } from "@/types";
 import { formatPrice } from "@/lib/utils";
 import { Plus, Trash2, Edit2, X } from "lucide-react";
@@ -31,8 +30,7 @@ export default function AdminProductsPage() {
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const load = async () => {
     const [pSnap, cSnap] = await Promise.all([
@@ -54,8 +52,7 @@ export default function AdminProductsPage() {
     setPrice("");
     setQuantity("");
     setCategoryId("");
-    setImageFile(null);
-    setImagePreview("");
+    setImageUrl("");
     setEditing(null);
     setShowForm(false);
   };
@@ -67,16 +64,8 @@ export default function AdminProductsPage() {
     setPrice(String(product.price));
     setQuantity(String(product.quantity));
     setCategoryId(product.categoryId);
-    setImagePreview(product.imageUrl);
+    setImageUrl(product.imageUrl || "");
     setShowForm(true);
-  };
-
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,14 +74,6 @@ export default function AdminProductsPage() {
     setSaving(true);
 
     try {
-      let imageUrl = editing?.imageUrl || "";
-
-      if (imageFile) {
-        const storageRef = ref(storage, `products/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(storageRef, imageFile);
-        imageUrl = await getDownloadURL(storageRef);
-      }
-
       const cat = categories.find((c) => c.id === categoryId);
       const data = {
         name: name.trim(),
@@ -101,7 +82,7 @@ export default function AdminProductsPage() {
         quantity: Number(quantity),
         categoryId,
         categoryName: cat?.name || "",
-        imageUrl,
+        imageUrl: imageUrl.trim(),
         updatedAt: Date.now(),
       };
 
@@ -118,7 +99,7 @@ export default function AdminProductsPage() {
       await load();
     } catch (err) {
       console.error(err);
-      alert("Error saving product");
+      alert("Error saving product. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -222,21 +203,31 @@ export default function AdminProductsPage() {
                 </select>
               </div>
 
+              {/* NEW: Image URL instead of file upload */}
               <div>
-                <label className="block text-sm font-medium mb-1">Product Image</label>
+                <label className="block text-sm font-medium mb-1">
+                  Image URL (paste link)
+                </label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImage}
-                  className="w-full text-sm"
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://i.ibb.co/your-image.jpg"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
                 />
-                {imagePreview && (
+                {imageUrl && (
                   <img
-                    src={imagePreview}
+                    src={imageUrl}
                     alt="Preview"
                     className="mt-2 w-24 h-24 object-cover rounded-lg border"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
                   />
                 )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Go to imgbb.com → upload picture → copy link → paste here
+                </p>
               </div>
 
               <button
@@ -323,4 +314,4 @@ export default function AdminProductsPage() {
       )}
     </div>
   );
-}
+                }
