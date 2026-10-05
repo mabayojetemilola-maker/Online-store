@@ -10,8 +10,38 @@ import {
   query,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Order } from "@/types";
 import { formatPrice } from "@/lib/utils";
+
+interface CartItem {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  imageUrl?: string;
+  maxQuantity?: number;
+}
+
+interface Address {
+  houseNumber: string;
+  street: string;
+  lga: string;
+  state: string;
+  landmark?: string;
+}
+
+interface Order {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userPhone: string;
+  userName?: string;
+  items: CartItem[];
+  total: number;
+  status: "pending" | "processing" | "completed" | "cancelled";
+  address?: Address;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -64,14 +94,19 @@ export default function AdminOrdersPage() {
         <div className="space-y-4">
           {orders.map((order) => (
             <div key={order.id} className="bg-white rounded-xl border p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              {/* Header */}
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                 <div>
-                  <p className="font-semibold">{order.userEmail}</p>
-                  <p className="text-sm text-gray-500">{order.userPhone}</p>
+                  <p className="font-semibold text-lg">
+                    {order.userName || "Customer"}
+                  </p>
+                  <p className="text-sm text-gray-600">{order.userEmail}</p>
+                  <p className="text-sm text-gray-600">{order.userPhone}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(order.createdAt).toLocaleString()}
                   </p>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(
@@ -95,6 +130,25 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
+              {/* Delivery Address */}
+              {order.address && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4 text-sm">
+                  <p className="font-semibold mb-2">Delivery Address</p>
+                  <p>
+                    {order.address.houseNumber}, {order.address.street}
+                  </p>
+                  <p>
+                    {order.address.lga}, {order.address.state}
+                  </p>
+                  {order.address.landmark && (
+                    <p className="text-gray-600">
+                      Landmark: {order.address.landmark}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Items */}
               <div className="border-t pt-3 space-y-1">
                 {order.items.map((item, i) => (
                   <div key={i} className="flex justify-between text-sm">
@@ -106,7 +160,9 @@ export default function AdminOrdersPage() {
                 ))}
                 <div className="flex justify-between font-bold pt-2 border-t mt-2">
                   <span>Total</span>
-                  <span className="text-primary-800">{formatPrice(order.total)}</span>
+                  <span className="text-primary-800">
+                    {formatPrice(order.total)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -115,4 +171,4 @@ export default function AdminOrdersPage() {
       )}
     </div>
   );
-}
+                      }
