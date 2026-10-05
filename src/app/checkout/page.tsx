@@ -17,25 +17,44 @@ export default function CheckoutPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  // For now we simulate order placement (Paystack will be added later)
+  // Address fields
+  const [houseNumber, setHouseNumber] = useState("");
+  const [street, setStreet] = useState("");
+  const [lga, setLga] = useState("");
+  const [state, setState] = useState("");
+  const [landmark, setLandmark] = useState("");
+
   const placeOrder = async () => {
     if (!user || !profile) return;
+
+    if (!houseNumber || !street || !lga || !state) {
+      setError("Please fill in House Number, Street, LGA and State");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      // Create order
       await addDoc(collection(db, "orders"), {
         userId: user.uid,
         userEmail: profile.email,
         userPhone: profile.phone,
+        userName: profile.username,
         items,
         total: totalPrice,
         status: "pending",
+        address: {
+          houseNumber,
+          street,
+          lga,
+          state,
+          landmark: landmark || "",
+        },
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
 
-      // Reduce stock for each product
+      // Reduce stock
       for (const item of items) {
         const productRef = doc(db, "products", item.productId);
         await updateDoc(productRef, {
@@ -96,6 +115,7 @@ export default function CheckoutPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Checkout</h1>
 
+      {/* Order Summary */}
       <div className="bg-white rounded-xl border p-6 mb-6">
         <h2 className="font-semibold mb-3">Order Summary</h2>
         {items.map((item) => (
@@ -112,11 +132,78 @@ export default function CheckoutPage() {
         </div>
       </div>
 
+      {/* Customer Info */}
       <div className="bg-white rounded-xl border p-6 mb-6">
-        <h2 className="font-semibold mb-3">Delivery Info</h2>
+        <h2 className="font-semibold mb-3">Your Info</h2>
         <p className="text-sm text-gray-600">Name: {profile?.username}</p>
         <p className="text-sm text-gray-600">Phone: {profile?.phone}</p>
         <p className="text-sm text-gray-600">Email: {profile?.email}</p>
+      </div>
+
+      {/* Delivery Address */}
+      <div className="bg-white rounded-xl border p-6 mb-6">
+        <h2 className="font-semibold mb-4">Delivery Address</h2>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">House Number *</label>
+            <input
+              type="text"
+              required
+              value={houseNumber}
+              onChange={(e) => setHouseNumber(e.target.value)}
+              placeholder="e.g. 12"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Street / Road *</label>
+            <input
+              type="text"
+              required
+              value={street}
+              onChange={(e) => setStreet(e.target.value)}
+              placeholder="e.g. Adeola Road"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Local Government Area (LGA) *</label>
+            <input
+              type="text"
+              required
+              value={lga}
+              onChange={(e) => setLga(e.target.value)}
+              placeholder="e.g. Ikeja"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">State *</label>
+            <input
+              type="text"
+              required
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              placeholder="e.g. Lagos"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Landmark (optional)</label>
+            <input
+              type="text"
+              value={landmark}
+              onChange={(e) => setLandmark(e.target.value)}
+              placeholder="e.g. Near GTBank, opposite church"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -124,8 +211,8 @@ export default function CheckoutPage() {
       )}
 
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800">
-        <strong>Note:</strong> Online payment (Paystack) will be activated soon.
-        For now, orders are placed as &quot;Pending&quot; and we will contact you for payment.
+        <strong>Note:</strong> Online payment will be added later.  
+        For now, orders are saved as Pending and we will contact you.
       </div>
 
       <button
@@ -146,4 +233,4 @@ export default function CheckoutPage() {
       </a>
     </div>
   );
-}
+        }
