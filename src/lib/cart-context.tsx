@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -26,18 +27,24 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const readyToSave = useRef(false);
 
-  // Load cart from Firestore when user logs in
   useEffect(() => {
     async function loadCart() {
+      readyToSave.current = false;
+
+      if (authLoading) return;
+
       if (!user) {
         setItems([]);
         setLoading(false);
         return;
       }
+
+      setLoading(true);
       try {
         const cartDoc = await getDoc(doc(db, "carts", user.uid));
         if (cartDoc.exists()) {
@@ -50,15 +57,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setItems([]);
       } finally {
         setLoading(false);
+        readyToSave.current = true;
       }
     }
     loadCart();
-  }, [user]);
+  }, [user, authLoading]);
 
-  // Save cart to Firestore whenever it changes
   useEffect(() => {
     async function saveCart() {
-      if (!user || loading) return;
+      if (!user || !readyToSave.current) return;
       try {
         await setDoc(doc(db, "carts", user.uid), {
           items,
@@ -69,7 +76,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     }
     saveCart();
-  }, [items, user, loading]);
+  }, [items, user]);
 
   const addItem = (item: CartItem) => {
     setItems((prev) => {
@@ -135,4 +142,4 @@ export function useCart() {
     throw new Error("useCart must be used within a CartProvider");
   }
   return context;
-}
+      }
