@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { formatPrice } from "@/lib/utils";
@@ -9,13 +8,19 @@ import { collection, addDoc, doc, updateDoc, increment } from "firebase/firestor
 import { db } from "@/lib/firebase";
 import Link from "next/link";
 
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
+}
+
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const { user, profile } = useAuth();
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Address fields
   const [houseNumber, setHouseNumber] = useState("");
@@ -24,7 +29,56 @@ export default function CheckoutPage() {
   const [state, setState] = useState("");
   const [landmark, setLandmark] = useState("");
 
-  const placeOrder = async () => {
+  // Load Paystack script
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    script.onload = () => setScriptLoaded(true);
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const saveOrder = async (paymentReference: string) => {
+    if (!user || !profile) return;
+
+    await addDoc(collection(db, "orders"), {
+      userId: user.uid,
+      userEmail: profile.email,
+      userPhone: profile.phone,
+      userName: profile.username,
+      items,
+      total: totalPrice,
+      status: "pending",
+      paymentReference,
+      paymentStatus: "paid",
+      address: {
+        houseNumber,
+        street,
+        lga,
+        state,
+        landmark: landmark || "",
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Reduce stock
+    for (const item of items) {
+      const productRef = doc(db, "products", item.productId);
+      await updateDoc(productRef, {
+        quantity: increment(-item.quantity),
+      });
+    }
+
+    clearCart();
+    setSuccess(true);
+  };
+
+  const payWithPaystack = () => {
     if (!user || !profile) return;
 
     if (!houseNumber || !street || !lga || !state) {
@@ -32,43 +86,60 @@ export default function CheckoutPage() {
       return;
     }
 
-    setLoading(true);
-    setError("");
-    try {
-      await addDoc(collection(db, "orders"), {
-        userId: user.uid,
-        userEmail: profile.email,
-        userPhone: profile.phone,
-        userName: profile.username,
-        items,
-        total: totalPrice,
-        status: "pending",
-        address: {
-          houseNumber,
-          street,
-          lga,
-          state,
-          landmark: landmark || "",
-        },
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-
-      // Reduce stock
-      for (const item of items) {
-        const productRef = doc(db, "products", item.productId);
-        await updateDoc(productRef, {
-          quantity: increment(-item.quantity),
-        });
-      }
-
-      clearCart();
-      setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to place order");
-    } finally {
-      setLoading(false);
+    if (!scriptLoaded || !window.PaystackPop) {
+      setError("Payment system is still loading. Please wait a few seconds and try again.");
+      return;
     }
+
+    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+
+    if (!publicKey) {
+      setError("Paystack key is missing. Please contact the admin.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    const handler = window.PaystackPop.setup({
+      key: publicKey,
+      email: profile.email,
+      amount: totalPrice * 100, // Paystack uses kobo
+      currency: "NGN",
+      ref: "PRT_" + Date.now(),
+      metadata: {
+        custom_fields: [
+          {
+            display_name: "Customer Name",
+            variable_name: "customer_name",
+            value: profile.username,
+          },
+          {
+            display_name: "Phone",
+            variable_name: "phone",
+            value: profile.phone,
+          },
+        ],
+      },
+      callback: function (response: any) {
+        // Payment successful
+        saveOrder(response.reference)
+          .then(() => {
+            setLoading(false);
+          })
+          .catch((err) => {
+            console.error(err);
+            setError("Payment successful but failed to save order. Please contact us with reference: " + response.reference);
+            setLoading(false);
+          });
+      },
+      onClose: function () {
+        setLoading(false);
+        setError("Payment was cancelled.");
+      },
+    });
+
+    handler.openIframe();
   };
 
   if (!user) {
@@ -97,7 +168,7 @@ export default function CheckoutPage() {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <div className="text-6xl mb-4">✅</div>
-        <h1 className="text-2xl font-bold text-primary-800 mb-2">Order Placed!</h1>
+        <h1 className="text-2xl font-bold text-primary-800 mb-2">Payment Successful!</h1>
         <p className="text-gray-600 mb-6">
           Thank you for your order. We will contact you soon on {profile?.phone}.
         </p>
@@ -199,7 +270,7 @@ export default function CheckoutPage() {
               type="text"
               value={landmark}
               onChange={(e) => setLandmark(e.target.value)}
-              placeholder="e.g. Near GTBank, opposite church"
+              placeholder="e.g. Near GTBank"
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
             />
           </div>
@@ -210,17 +281,12 @@ export default function CheckoutPage() {
         <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
       )}
 
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800">
-        <strong>Note:</strong> Online payment will be added later.  
-        For now, orders are saved as Pending and we will contact you.
-      </div>
-
       <button
-        onClick={placeOrder}
-        disabled={loading}
+        onClick={payWithPaystack}
+        disabled={loading || !scriptLoaded}
         className="w-full py-3 bg-primary-700 hover:bg-primary-800 text-white font-semibold rounded-lg disabled:opacity-50"
       >
-        {loading ? "Placing Order..." : "Place Order"}
+        {loading ? "Processing..." : `Pay ${formatPrice(totalPrice)} with Paystack`}
       </button>
 
       <a
@@ -233,4 +299,4 @@ export default function CheckoutPage() {
       </a>
     </div>
   );
-        }
+              }
